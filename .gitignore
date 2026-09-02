@@ -4,3 +4,8 @@ dist/
 next-env.d.ts
 .DS_Store
 *.log
+.env*
+!.env.example
+site-build*.tar.gz
+generated_images/
+upload/
