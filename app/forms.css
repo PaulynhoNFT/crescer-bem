@@ -1,0 +1,4 @@
+.form-message{padding:11px;border-radius:10px;text-align:left;font-size:13px}
+.form-message.error{background:#fff0ef;color:#9b3028}
+.form-message.success{background:#edf9f1;color:#176c4c}
+.primary:disabled{opacity:.65;cursor:wait}
