@@ -1,7 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import Dashboard from './Dashboard'
 
 const foods = [
   ['Arroz','grain','🍚'],['Feijão','legume','🫘'],['Ovo','protein','🥚'],['Frango','protein','🍗'],
@@ -28,21 +29,28 @@ function MealBuilder({ compact=false }) {
 
 export default function Home(){
  const [view,setView]=useState('home'); const [menu,setMenu]=useState(false)
+ const [session,setSession]=useState(null)
  const [signup,setSignup]=useState({name:'',email:'',phone:'',password:'',terms:false,whatsapp:false})
  const [signupStatus,setSignupStatus]=useState({loading:false,error:'',success:''})
+ const [login,setLogin]=useState({email:'',password:''})
+ const [loginStatus,setLoginStatus]=useState({loading:false,error:''})
  const go=v=>{setView(v);setMenu(false);window.scrollTo({top:0,behavior:'smooth'})}
+ useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data})=>setSession(data.session));const {data}=supabase.auth.onAuthStateChange((_event,next)=>setSession(next));return()=>data.subscription.unsubscribe()},[])
  const updateSignup=(field,value)=>setSignup(s=>({...s,[field]:value}))
  const createAccount=async()=>{
   setSignupStatus({loading:true,error:'',success:''})
   if(!signup.terms){setSignupStatus({loading:false,error:'Aceite os Termos e a Política de Privacidade para continuar.',success:''});return}
   if(signup.password.length<8){setSignupStatus({loading:false,error:'A senha precisa ter pelo menos 8 caracteres.',success:''});return}
   if(!supabase){setSignupStatus({loading:false,error:'A conexão segura ainda não está disponível.',success:''});return}
-  const {error}=await supabase.auth.signUp({email:signup.email,password:signup.password,options:{data:{full_name:signup.name,phone:signup.phone,whatsapp_opt_in:signup.whatsapp,email_opt_in:false}}})
+  const {data,error}=await supabase.auth.signUp({email:signup.email,password:signup.password,options:{data:{full_name:signup.name,phone:signup.phone,whatsapp_opt_in:signup.whatsapp,email_opt_in:false}}})
   if(error){setSignupStatus({loading:false,error:error.message,success:''});return}
+  if(data.session){setSession(data.session);go('dashboard');setSignupStatus({loading:false,error:'',success:''});return}
   setSignupStatus({loading:false,error:'',success:'Conta criada! Confira seu e-mail para confirmar o cadastro.'})
  }
+ const signIn=async(event)=>{event.preventDefault();setLoginStatus({loading:true,error:''});if(!supabase){setLoginStatus({loading:false,error:'A conexão segura ainda não está disponível.'});return}const {data,error}=await supabase.auth.signInWithPassword(login);if(error){setLoginStatus({loading:false,error:'E-mail ou senha incorretos, ou conta ainda não confirmada.'});return}setSession(data.session);setLoginStatus({loading:false,error:''});go('dashboard')}
+ const signOut=async()=>{await supabase?.auth.signOut();setSession(null);go('home')}
  return <main>
-  <header><button className="brand" onClick={()=>go('home')}><span className="logo">🍎</span><span>Crescer <b>Bem</b></span></button><nav className={menu?'open':''}><button onClick={()=>go('home')}>Início</button><button onClick={()=>go('builder')}>Montar refeição</button><a href="#como">Como funciona</a><a href="#seguranca">Segurança</a></nav><button className="login" onClick={()=>go('signup')}>Criar conta grátis</button><button className="hamb" onClick={()=>setMenu(!menu)}>☰</button></header>
+  <header><button className="brand" onClick={()=>go('home')}><span className="logo">🍎</span><span>Crescer <b>Bem</b></span></button><nav className={menu?'open':''}><button onClick={()=>go('home')}>Início</button><button onClick={()=>go('builder')}>Montar refeição</button>{session&&<button onClick={()=>go('dashboard')}>Minha família</button>}<a href="#seguranca">Segurança</a></nav><button className="login" onClick={()=>go(session?'dashboard':'login')}>{session?'Meu painel':'Entrar'}</button><button className="hamb" onClick={()=>setMenu(!menu)}>☰</button></header>
   {view==='home' && <>
    <section className="hero"><div className="hero-copy"><span className="pill">100% GRATUITO PARA FAMÍLIAS</span><h1>Comer melhor começa com o que você <em>já tem em casa.</em></h1><p>Ideias simples de refeições, receitas e hábitos saudáveis para sua família — sem dietas radicais e sem culpa.</p><div className="actions"><button className="primary" onClick={()=>go('builder')}>Montar uma refeição <span>→</span></button><a href="#como">Veja como funciona</a></div><div className="trust"><span>✓ Sem cartão</span><span>✓ Feito para o Brasil</span><span>✓ Privacidade em primeiro lugar</span></div></div><div className="hero-card"><MealBuilder compact/></div></section>
    <section className="proof"><p>UMA ROTINA MAIS LEVE PARA TODA A FAMÍLIA</p><div><span><b>🍽️</b>Refeições práticas</span><span><b>🧺</b>Menos desperdício</span><span><b>🌱</b>Hábitos positivos</span><span><b>🛡️</b>Orientação segura</span></div></section>
@@ -51,7 +59,10 @@ export default function Home(){
    <section className="cta"><span>🍎</span><div><h2>Uma escolha saudável por vez.</h2><p>Experimente agora e monte a próxima refeição da sua família.</p></div><button onClick={()=>go('builder')}>Montar refeição grátis →</button></section>
   </>}
   {view==='builder' && <section className="app-page"><button className="back" onClick={()=>go('home')}>← Voltar</button><span className="pill">EXPERIMENTE SEM CADASTRO</span><h1>O que vocês têm em casa?</h1><p>Selecione os alimentos e receba uma combinação educativa. Nenhum dado é salvo nesta demonstração.</p><MealBuilder/></section>}
+  {view==='login' && <section className="app-page signup"><button className="back" onClick={()=>go('home')}>← Voltar</button><form className="form-card" onSubmit={signIn}><span className="logo big">🍎</span><span className="eyebrow">ÁREA DA FAMÍLIA</span><h1>Entrar</h1><p>Acesse seus perfis e acompanhe a rotina da família.</p><label>E-mail<input value={login.email} onChange={e=>setLogin({...login,email:e.target.value})} type="email" required placeholder="voce@email.com"/></label><label>Senha<input value={login.password} onChange={e=>setLogin({...login,password:e.target.value})} type="password" required placeholder="Sua senha"/></label>{loginStatus.error&&<p className="form-message error">{loginStatus.error}</p>}<button className="primary full" disabled={loginStatus.loading}>{loginStatus.loading?'Entrando…':'Entrar →'}</button><button type="button" className="text-button" onClick={()=>go('signup')}>Ainda não tenho conta</button></form></section>}
   {view==='signup' && <section className="app-page signup"><button className="back" onClick={()=>go('home')}>← Voltar</button><div className="form-card"><span className="logo big">🍎</span><span className="eyebrow">CONTA DO RESPONSÁVEL</span><h1>Comece gratuitamente</h1><p>Seus dados de contato são separados dos dados da criança.</p><label>Seu nome<input value={signup.name} onChange={e=>updateSignup('name',e.target.value)} placeholder="Nome do pai, mãe ou responsável"/></label><label>E-mail<input value={signup.email} onChange={e=>updateSignup('email',e.target.value)} type="email" placeholder="voce@email.com"/></label><label>WhatsApp<input value={signup.phone} onChange={e=>updateSignup('phone',e.target.value)} type="tel" placeholder="(11) 99999-9999"/></label><label>Senha<input value={signup.password} onChange={e=>updateSignup('password',e.target.value)} type="password" placeholder="Mínimo de 8 caracteres"/></label><label className="consent"><input checked={signup.terms} onChange={e=>updateSignup('terms',e.target.checked)} type="checkbox"/> Li e aceito os Termos e a Política de Privacidade.</label><label className="consent optional"><input checked={signup.whatsapp} onChange={e=>updateSignup('whatsapp',e.target.checked)} type="checkbox"/> Quero receber dicas e receitas pelo WhatsApp (opcional).</label>{signupStatus.error&&<p className="form-message error">{signupStatus.error}</p>}{signupStatus.success&&<p className="form-message success">{signupStatus.success}</p>}<button className="primary full" disabled={signupStatus.loading} onClick={createAccount}>{signupStatus.loading?'Criando conta…':'Continuar grátis →'}</button><small>Não vendemos dados pessoais nem usamos informações de saúde infantil para publicidade.</small></div></section>}
+  {view==='dashboard'&&session&&<Dashboard session={session} onLogout={signOut} onMeal={()=>go('builder')}/>}
+  {view==='dashboard'&&!session&&<section className="app-page"><h1>Entre para acessar sua família</h1><button className="primary" onClick={()=>go('login')}>Entrar</button></section>}
   <footer><div className="brand"><span className="logo">🍎</span><span>Crescer <b>Bem</b></span></div><p>Assistente gratuito de alimentação saudável para famílias.</p><small>Este serviço oferece orientação educativa e não substitui avaliação de pediatra ou nutricionista.</small></footer>
  </main>
 }
